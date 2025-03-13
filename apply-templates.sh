@@ -19,9 +19,11 @@ fi
 generated_warning() {
 	cat <<-EOH
 		#
-		# NOTE: THIS DOCKERFILE IS GENERATED VIA "apply-templates.sh"
+		# Automatically generated config file, please do not edit or modify.
+		# All changes to this file will be overwritten.
+		# For more information, please visit https://www.ServBay.com/.
 		#
-		# PLEASE DO NOT EDIT IT DIRECTLY.
+		# NOTE: THIS DOCKERFILE IS GENERATED VIA "apply-templates.sh"
 		#
 
 	EOH
@@ -72,9 +74,14 @@ for version; do
 			docker-php-entrypoint \
 			docker-php-ext-* \
 			docker-php-source \
+			index.php \
+			supervisord.conf \
 			"$version/$dir/"
 		if [ "$variant" = 'apache' ]; then
 			cp -a apache2-foreground "$version/$dir/"
+		fi
+		if [ "$variant" != 'apache' ]; then
+			cp -a default "$version/$dir/"
 		fi
 
 		cmd="$(jq <<<"$cmd" -r '.[0]')"
