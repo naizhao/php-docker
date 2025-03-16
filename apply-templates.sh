@@ -57,7 +57,7 @@ for version; do
 
 		case "$variant" in
 			apache) cmd='["apache2-foreground"]' ;;
-			fpm) cmd='["php-fpm"]' ;;
+			nginx) cmd='["php-fpm"]' ;;
 			*) cmd='["php", "-a"]' ;;
 		esac
 		export cmd
@@ -84,9 +84,55 @@ for version; do
 			cp -a default "$version/$dir/"
 		fi
 
+		if [ "$variant" == 'apache' ]; then
+			cat <<EOF >> "$version/$dir/supervisord.conf"
+
+[program:apache2]
+command=/usr/local/bin/apache2-foreground
+
+EOF
+		else
+			cat <<EOF >> "$version/$dir/supervisord.conf"
+
+[program:php]
+command=/usr/local/php/sbin/php-fpm --nodaemonize
+
+[program:nginx]
+command=/usr/sbin/nginx -g 'daemon off;'
+
+EOF
+		fi
+
+		IFS=. read -r major_version minor_version <<< "$version"
+		if [[ "$major_version" -gt 8 ]] || { [[ "$major_version" -eq 8 ]] && [[ "$minor_version" -ge 1 ]]; }; then
+			buildextra=true
+		else
+			buildextra=false
+		fi
+
+		if [[ "$version" == "8.0" ]]; then
+			cp -a patch/php-openssl3/* "$version/$dir/"
+		fi
+
+		if [[ "$major_version" -le 7 ]]; then
+			cp -a patch/php-openssl3/openssl.patch "$version/$dir/"
+			if [[ "$minor_version" -ge 1 ]]; then
+				cp -a patch/php-openssl3/openssl-2.patch "$version/$dir/"
+			fi
+		fi
+
+		if [[ -d "./patch/php$version" ]]; then
+			cp -a ./patch/php$version/* "$version/$dir/"
+		fi
+
 		cmd="$(jq <<<"$cmd" -r '.[0]')"
 		if [ "$cmd" != 'php' ]; then
-			sed -i -e 's! php ! '"$cmd"' !g' "$version/$dir/docker-php-entrypoint"
+			os=$(uname -s)
+			if [ "$os" = "Darwin" ]; then
+				sed -i '' 's! php ! '"$cmd"' !g' "$version/$dir/docker-php-entrypoint"
+			else
+				sed -i -e 's! php ! '"$cmd"' !g' "$version/$dir/docker-php-entrypoint"
+			fi
 		fi
 	done
 done

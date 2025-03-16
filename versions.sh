@@ -13,39 +13,26 @@ fi
 versions=( "${versions[@]%/}" )
 
 for version in "${versions[@]}"; do
-	rcVersion="${version%-rc}"
+	rcVersion="${version}"
 	export version rcVersion
 
 	# scrape the relevant API based on whether we're looking for pre-releases
-	if [ "$rcVersion" = "$version" ]; then
-		apiUrl="https://www.php.net/releases/index.php?json&max=100&version=${rcVersion%%.*}"
-		apiJqExpr='
-			(keys[] | select(startswith(env.rcVersion))) as $version
-			| [ $version, (
-				.[$version].source[]
-				| select(.filename | endswith(".xz"))
-				|
-					"https://www.php.net/distributions/" + .filename,
-					"https://www.php.net/distributions/" + .filename + ".asc",
-					.sha256 // ""
-			) ]
-		'
-	else
-		apiUrl='https://qa.php.net/api.php?type=qa-releases&format=json'
-		apiJqExpr='
-			(.releases // [])[]
-			| select(.version | startswith(env.rcVersion))
-			| [
-				.version,
-				.files.xz.path // "",
-				"",
-				.files.xz.sha256 // ""
-			]
-		'
-	fi
+	apiUrl="https://www.php.net/releases/index.php?json&max=1&version=${rcVersion}"
+	apiJqExpr='
+		(keys[] | select(startswith(env.rcVersion))) as $version
+		| [ $version, (
+			.[$version].source[]
+			| select(.filename | endswith(".gz"))
+			|
+				"https://www.php.net/distributions/" + .filename,
+				"https://www.php.net/distributions/" + .filename + ".asc",
+				.sha256 // ""
+		) ]
+	'
 	IFS=$'\n'
 	possibles=( $(
-		curl -fsSL "$apiUrl" \
+		curl -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36' \
+			-fsSL "$apiUrl" \
 			| jq --raw-output "$apiJqExpr | @sh" \
 			| sort -rV
 	) )
@@ -64,7 +51,7 @@ for version in "${versions[@]}"; do
 		fi
 	fi
 
-	# format of "possibles" array entries is "VERSION URL.TAR.XZ URL.TAR.XZ.ASC SHA256" (each value shell quoted)
+	# format of "possibles" array entries is "VERSION URL.TAR.GZ URL.TAR.GZ.ASC SHA256" (each value shell quoted)
 	#   see the "apiJqExpr" values above for more details
 	eval "possi=( ${possibles[0]} )"
 	fullVersion="${possi[0]}"
@@ -85,12 +72,12 @@ for version in "${versions[@]}"; do
 	variants='[]'
 	# order here controls the order of the library/ file
 	for suite in \
-		bookworm \
+		buster \
 		bullseye \
+		bookworm \
 		alpine3.21 \
-		alpine3.20 \
 	; do
-		for variant in cli apache fpm zts; do
+		for variant in apache nginx; do
 			if [[ "$suite" = alpine* ]]; then
 				if [ "$variant" = 'apache' ]; then
 					continue
@@ -116,11 +103,11 @@ for version in "${versions[@]}"; do
 		'
 	)"
 
-	if [ "$version" = "$rcVersion" ]; then
-		json="$(jq <<<"$json" -c '
-			.[env.version + "-rc"] //= null
-		')"
-	fi
+	# if [ "$version" = "$rcVersion" ]; then
+	# 	json="$(jq <<<"$json" -c '
+	# 		.[env.version + "-rc"] //= null
+	# 	')"
+	# fi
 done
 
 jq <<<"$json" -S . > versions.json

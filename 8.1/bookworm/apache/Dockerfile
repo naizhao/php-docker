@@ -1,10 +1,12 @@
 #
+# Automatically generated config file, please do not edit or modify.
+# All changes to this file will be overwritten.
+# For more information, please visit https://www.ServBay.com/.
+#
 # NOTE: THIS DOCKERFILE IS GENERATED VIA "apply-templates.sh"
 #
-# PLEASE DO NOT EDIT IT DIRECTLY.
-#
 
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim AS builder
 
 # prevent Debian's PHP packages from being installed
 # https://github.com/docker-library/php/pull/542
@@ -36,10 +38,12 @@ RUN set -eux; \
 		ca-certificates \
 		curl \
 		xz-utils \
+		wget \
+        unzip \
 	; \
 	rm -rf /var/lib/apt/lists/*
 
-ENV PHP_INI_DIR /usr/local/etc/php
+ENV PHP_INI_DIR=/usr/local/php/etc
 RUN set -eux; \
 	mkdir -p "$PHP_INI_DIR/conf.d"; \
 # allow running as an arbitrary user (https://github.com/docker-library/php/issues/743)
@@ -48,8 +52,8 @@ RUN set -eux; \
 	chown www-data:www-data /var/www/html; \
 	chmod 1777 /var/www/html
 
-ENV APACHE_CONFDIR /etc/apache2
-ENV APACHE_ENVVARS $APACHE_CONFDIR/envvars
+ENV APACHE_CONFDIR=/etc/apache2
+ENV APACHE_ENVVARS=$APACHE_CONFDIR/envvars
 
 RUN set -eux; \
 	apt-get update; \
@@ -120,9 +124,9 @@ ENV PHP_LDFLAGS="-Wl,-O1 -pie"
 
 ENV GPG_KEYS 528995BFEDFBA7191D46839EF9BA0ADA31CBD89E 39B641343D8C104B2B146DC3F9C39DC0B9698544 F1F692238FBC1666E5A5CCD4199F9DFEF6FFBAFD
 
-ENV PHP_VERSION 8.1.31
-ENV PHP_URL="https://www.php.net/distributions/php-8.1.31.tar.xz" PHP_ASC_URL="https://www.php.net/distributions/php-8.1.31.tar.xz.asc"
-ENV PHP_SHA256="c4f244d46ba51c72f7d13d4f66ce6a9e9a8d6b669c51be35e01765ba58e7afca"
+ENV PHP_VERSION=8.1.31
+ENV PHP_URL="https://www.php.net/distributions/php-8.1.31.tar.gz" PHP_ASC_URL="https://www.php.net/distributions/php-8.1.31.tar.gz.asc"
+ENV PHP_SHA256="618923b407c4575bfee085f00c4aaa16a5cc86d4b1eb893c0f352d61541bbfb1"
 
 RUN set -eux; \
 	\
@@ -134,19 +138,19 @@ RUN set -eux; \
 	mkdir -p /usr/src; \
 	cd /usr/src; \
 	\
-	curl -fsSL -o php.tar.xz "$PHP_URL"; \
+	curl -fsSL -o php.tar.gz "$PHP_URL"; \
 	\
 	if [ -n "$PHP_SHA256" ]; then \
-		echo "$PHP_SHA256 *php.tar.xz" | sha256sum -c -; \
+		echo "$PHP_SHA256 *php.tar.gz" | sha256sum -c -; \
 	fi; \
 	\
 	if [ -n "$PHP_ASC_URL" ]; then \
-		curl -fsSL -o php.tar.xz.asc "$PHP_ASC_URL"; \
+		curl -fsSL -o php.tar.gz.asc "$PHP_ASC_URL"; \
 		export GNUPGHOME="$(mktemp -d)"; \
 		for key in $GPG_KEYS; do \
 			gpg --batch --keyserver keyserver.ubuntu.com --recv-keys "$key"; \
 		done; \
-		gpg --batch --verify php.tar.xz.asc php.tar.xz; \
+		gpg --batch --verify php.tar.gz.asc php.tar.gz; \
 		gpgconf --kill all; \
 		rm -rf "$GNUPGHOME"; \
 	fi; \
@@ -156,6 +160,7 @@ RUN set -eux; \
 	apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false
 
 COPY docker-php-source /usr/local/bin/
+COPY *.patch /tmp/patches/
 
 RUN set -eux; \
 	\
@@ -165,25 +170,31 @@ RUN set -eux; \
 		apache2-dev \
 		libargon2-dev \
 		libcurl4-openssl-dev \
+		libicu-dev \
 		libonig-dev \
 		libreadline-dev \
 		libsodium-dev \
 		libsqlite3-dev \
 		libssl-dev \
 		libxml2-dev \
+		libxslt-dev \
 		zlib1g-dev \
 	; \
 	\
 	export \
+		PATH="$PATH:/usr/local/php/bin:/usr/local/php/sbin" \
 		CFLAGS="$PHP_CFLAGS" \
 		CPPFLAGS="$PHP_CPPFLAGS" \
 		LDFLAGS="$PHP_LDFLAGS" \
 # https://github.com/php/php-src/blob/d6299206dd828382753453befd1b915491b741c6/configure.ac#L1496-L1511
-		PHP_BUILD_PROVIDER='https://github.com/docker-library/php' \
-		PHP_UNAME='Linux - Docker' \
+		PHP_BUILD_PROVIDER='https://github.com/ServBay/PHP-Docker-Image' \
+		PHP_UNAME='Linux - Docker (ServBay)' \
 	; \
 	docker-php-source extract; \
 	cd /usr/src/php; \
+	# Apply PHP patches
+	find /tmp/patches/ -maxdepth 1 -name "*.patch" -print0 | sort -zV | xargs -0 -I {} sh -c 'patch -p1 < "{}" && echo "Applied {}" || (echo "Failed to apply {}" >&2 && exit 0)'; \
+	\
 	gnuArch="$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)"; \
 	debMultiarch="$(dpkg-architecture --query DEB_BUILD_MULTIARCH)"; \
 # https://bugs.php.net/bug.php?id=74125
@@ -191,6 +202,7 @@ RUN set -eux; \
 		ln -sT "/usr/include/$debMultiarch/curl" /usr/local/include/curl; \
 	fi; \
 	./configure \
+		--prefix=/usr/local/php \
 		--build="$gnuArch" \
 		--with-config-file-path="$PHP_INI_DIR" \
 		--with-config-file-scan-dir="$PHP_INI_DIR/conf.d" \
@@ -223,6 +235,10 @@ RUN set -eux; \
 		--with-openssl \
 		--with-readline \
 		--with-zlib \
+		--with-xsl \
+		--enable-intl \
+		--enable-mbregex \
+		--enable-xml \
 		\
 # https://github.com/bwoebi/phpdbg-docs/issues/1#issuecomment-163872806 ("phpdbg is primarily a CLI debugger, and is not suitable for debugging an fpm stack.")
 		--disable-phpdbg \
@@ -258,6 +274,9 @@ RUN set -eux; \
 	\
 	cd /; \
 	docker-php-source delete; \
+# create symlinks for php-fpm and php-cli
+	ln -s /usr/local/php/bin/* /usr/local/bin/; \
+	ln -s /usr/local/php/sbin/* /usr/local/sbin/; \
 	\
 # reset apt-mark's "manual" list so that "purge --auto-remove" will remove all build dependencies
 	apt-mark auto '.*' > /dev/null; \
@@ -282,15 +301,188 @@ RUN set -eux; \
 
 COPY docker-php-ext-* docker-php-entrypoint /usr/local/bin/
 
+RUN	apt update && apt install -y --no-install-recommends \
+	libargon2-dev \
+	libcurl4-openssl-dev \
+	libonig-dev \
+	libreadline-dev \
+	libsodium-dev \
+	libsqlite3-dev \
+	libssl-dev \
+	libxml2-dev \
+	libxslt-dev \
+	zlib1g-dev
+
+# GD
+RUN apt update && apt install -y \
+	zlib1g-dev \
+	libfreetype-dev \
+	libjpeg62-turbo-dev \
+	libpng-dev \
+	&& docker-php-ext-configure gd --with-freetype --with-jpeg \
+	&& docker-php-ext-install -j$(nproc) gd
+
+# Imagick
+RUN apt-get update && apt-get install -y \
+    imagemagick \
+    libmagickwand-dev \
+    --no-install-recommends \
+	&& curl -L -o /tmp/imagick.tar.gz https://github.com/Imagick/imagick/archive/7088edc353f53c4bc644573a79cdcd67a726ae16.tar.gz \
+    && tar --strip-components=1 -xf /tmp/imagick.tar.gz \
+    && phpize \
+    && ./configure \
+    && make \
+    && make install \
+    && echo "extension=imagick.so" > /usr/local/php/etc/conf.d/docker-php-ext-imagick.ini \
+    && rm -rf /tmp/* \
+
+# Memcached
+RUN apt update && apt install -y \
+	libmemcached-dev \
+	&& pecl install memcached-3.2.0 \
+	&& docker-php-ext-enable memcached
+
+# PGSQL
+RUN apt update && apt install -y \
+	libpq-dev \
+	&& docker-php-ext-install pdo_pgsql pgsql \
+	&& docker-php-ext-enable pdo_pgsql pgsql
+
+# MySQL
+RUN docker-php-ext-install mysqli pdo_mysql \
+	&& docker-php-ext-enable mysqli pdo_mysql
+
+# Redis
+RUN pecl install redis \
+	&& docker-php-ext-enable redis
+
+# IMAP
+RUN apt update && apt install -y \
+	libc-client-dev \
+	libkrb5-dev \
+	&& docker-php-ext-configure imap --with-kerberos --with-imap-ssl \
+	&& docker-php-ext-install imap \
+    && docker-php-ext-enable imap
+
+# Misc modules
+RUN apt update && apt install -y \
+	libzip-dev \
+	libtidy-dev \
+	&& docker-php-ext-install zip opcache exif ftp sockets bcmath calendar gettext pcntl tidy \
+    && docker-php-ext-enable zip opcache exif ftp sockets tidy bcmath calendar gettext pcntl
+
+
 # sodium was built as a shared module (so that it can be replaced later if so desired), so let's enable it too (https://github.com/docker-library/php/issues/598)
 RUN docker-php-ext-enable sodium
 
-ENTRYPOINT ["docker-php-entrypoint"]
+# Runtime Image
+FROM debian:bookworm-slim
+
+ENV PHP_INI_DIR=/usr/local/php/etc
+ENV PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/php/bin:/usr/local/php/sbin"
+
+LABEL org.opencontainers.image.title="ServBay PHP Web Server" \
+      org.opencontainers.image.description="PHP 8.1.31 with extensions for ServBay" \
+      org.opencontainers.image.vendor="ServBay" \
+      org.opencontainers.image.url="https://www.servbay.com" \
+      org.opencontainers.image.source="https://github.com/ServBay/ServBay-Docker-Images" \
+      org.opencontainers.image.version="8.1.31" \
+    #   org.opencontainers.image.created="${BUILD_DATE}" \
+    #   org.opencontainers.image.revision="${VCS_REF}"
+      com.servbay.component="php-web-runtime" \
+      com.servbay.maintainer="dev-team@servbay.com" \
+      com.servbay.quality-tier="production"
+
+# Install dependencies
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        redis \
+        supervisor \
+        curl \
+		xz-utils \
+		wget \
+        unzip \
+        libargon2-1 \
+        libcurl4 \
+        libonig5 \
+        libsodium23 \
+        libsqlite3-0 \
+        libssl3 \
+        libicu72 \
+        libreadline8 \
+        libxml2 \
+        libxslt1.1 \
+        zlib1g \
+        libfreetype6 \
+        libjpeg62-turbo \
+        libpng16-16 \
+        libmagickwand-6.q16-6 \
+        libmemcached11 \
+        libpq5 \
+        libzip4 \
+        libtidy5deb1 \
+        libgssapi-krb5-2 \
+        libc-client2007e \
+        libodbc1; \
+	\
+	# Download the package to configure the Microsoft repo \
+	curl -sSL -O https://packages.microsoft.com/config/debian/$(grep VERSION_ID /etc/os-release | cut -d '"' -f 2 | cut -d '.' -f 1)/packages-microsoft-prod.deb; \
+	# Install the package \
+	dpkg -i packages-microsoft-prod.deb; \
+	# Delete the file \
+	rm packages-microsoft-prod.deb; \
+	\
+	apt-get update; \
+	ACCEPT_EULA=Y apt-get install -y --no-install-recommends unixodbc-dev; \
+	\
+	rm -rf /var/lib/apt/lists/*
+
+# Copy files from builder
+COPY --from=builder /usr/local/php /usr/local/php
+COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=builder /usr/local/sbin /usr/local/sbin
+
+# Composer
+RUN <<EOF
+	curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+	chmod +x /usr/local/bin/composer
+EOF
+
+# Copy supervisor configuration
+COPY supervisord.conf /etc/supervisor/
+
+RUN set -eux; \
+	sed -i 's#daemonize yes#daemonize no#g' /etc/redis/redis.conf;
+
+ENV APACHE_CONFDIR=/etc/apache2
+ENV APACHE_ENVVARS=$APACHE_CONFDIR/envvars
+
+RUN set -eux; \
+	apt-get update; \
+	apt-get install -y --no-install-recommends apache2; \
+	rm -rf /var/lib/apt/lists/*; \
+	rm /var/www/html/*; \
+	mkdir -p /var/www/html/public;
+
+COPY --from=builder /etc/apache2 /etc/apache2
+COPY --from=builder /usr/lib/apache2 /usr/lib/apache2
+COPY index.php /var/www/html/public
+
+RUN a2dismod mpm_event && a2enmod mpm_prefork
+
+RUN set -eux; \
+	sed -i 's#webmaster@localhost#docker-image@servbay.host#g' /etc/apache2/sites-enabled/000-default.conf; \
+	sed -i 's#/var/www/html#/var/www/html/public#g' /etc/apache2/sites-enabled/000-default.conf;
+
 # https://httpd.apache.org/docs/2.4/stopping.html#gracefulstop
 STOPSIGNAL SIGWINCH
 
 COPY apache2-foreground /usr/local/bin/
 WORKDIR /var/www/html
 
-EXPOSE 80
-CMD ["apache2-foreground"]
+EXPOSE 80 443
+
+
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf", "-n"]

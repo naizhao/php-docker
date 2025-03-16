@@ -108,10 +108,16 @@ for module in $modules; do
 			ini="$iniName"
 			;;
 		*)
-			ini="$PHP_INI_DIR/conf.d/${iniName:-"docker-php-ext-$ext.ini"}"
+			ini="$PHP_INI_DIR/conf.d/${iniName:-"servbay-docker-php-ext-$ext.ini"}"
 			;;
 	esac
 	if ! grep -qFx -e "$line" -e "$line.so" "$ini" 2>/dev/null; then
+		cat << EOF >> "$ini"
+; Automatically generated config file, please do not edit or modify.
+; All changes to this file will be overwritten.
+; For more information, please visit https://www.ServBay.com/.
+
+EOF
 		echo "$line" >> "$ini"
 	fi
 done

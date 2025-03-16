@@ -83,8 +83,8 @@ RUN set -eux; \
 	chmod 1777 /var/www/html
 
 {{ if env.variant == "apache" then ( -}}
-ENV APACHE_CONFDIR /etc/apache2
-ENV APACHE_ENVVARS $APACHE_CONFDIR/envvars
+ENV APACHE_CONFDIR=/etc/apache2
+ENV APACHE_ENVVARS=$APACHE_CONFDIR/envvars
 
 RUN set -eux; \
 	apt-get update; \
@@ -198,7 +198,7 @@ ENV GPG_KEYS {{
 			# https://www.php.net/gpg-keys.php#gpg-8.0
 			"1729 F839 38DA 44E2 7BA0  F4D3 DBDB 3974 70D1 2172", # pollita
 			"BFDD D286 4282 4F81 18EF  7790 9B67 A5C1 2229 118F", # carusogabriel
-			"2C16 C765 DBE5 4A08 8130  F1BC 4B9B 5F60 0B55 F3B4"  # carusogabriel
+			"2C16 C765 DBE5 4A08 8130  F1BC 4B9B 5F60 0B55 F3B4",  # carusogabriel
 			"39B6 4134 3D8C 104B 2B14  6DC3 F9C3 9DC0 B969 8544"  # ramsey
 		],
 
@@ -206,14 +206,14 @@ ENV GPG_KEYS {{
 			# https://wiki.php.net/todo/php81#release_managers
 			# https://www.php.net/gpg-keys.php#gpg-7.4
 			"5A52 8807 81F7 5560 8BF8  15FC 910D EB46 F53E A312", # derick
-			"4267 0A7F E4D0 441C 8E46  3234 9E4F DC07 4A4E F02D", # petk
+			"4267 0A7F E4D0 441C 8E46  3234 9E4F DC07 4A4E F02D" # petk
 		],
 
 		"7.3": [
 			# https://wiki.php.net/todo/php81#release_managers
 			# https://www.php.net/gpg-keys.php#gpg-7.3
 			"CBAF 69F1 73A0 FEA4 B537  F470 D66C 9593 118B CCB6", # cmb
-			"F382 5282 6ACD 957E F380  D39F 2F79 56BC 5DA0 4B5D", # smalyshev
+			"F382 5282 6ACD 957E F380  D39F 2F79 56BC 5DA0 4B5D" # smalyshev
 		],
 
 		"7.2": [
@@ -236,21 +236,35 @@ ENV GPG_KEYS {{
 			# https://wiki.php.net/todo/php81#release_managers
 			# https://www.php.net/gpg-keys.php#gpg-7.0
 			"1A4E 8B72 77C4 2E53 DBA9  C7B9 BCAA 30EA 9C0D 5763", # ab
-			"6E4F 6AB3 21FD C07F 2C33  2E3A C2BF 0BC4 33CF C8B3", # tyrael
+			"6E4F 6AB3 21FD C07F 2C33  2E3A C2BF 0BC4 33CF C8B3" # tyrael
 		],
 
 		"5.6": [
 			# https://wiki.php.net/todo/php81#release_managers
 			# https://www.php.net/gpg-keys.php#gpg-5.6
 			"6E4F 6AB3 21FD C07F 2C33  2E3A C2BF 0BC4 33CF C8B3", # tyrael
-			"0BD7 8B5F 9750 0D45 0838  F95D FE85 7D9A 90D9 0EC1", # jpauli
+			"0BD7 8B5F 9750 0D45 0838  F95D FE85 7D9A 90D9 0EC1" # jpauli
+		],
+
+		"5.5": [
+			# https://wiki.php.net/todo/php81#release_managers
+			# https://www.php.net/gpg-keys.php#gpg-5.5
+			"0B96 609E 270F 565C 1329  2B24 C13C 70B8 7267 B52D", # dsp
+			"F382 5282 6ACD 957E F380  D39F 2F79 56BC 5DA0 4B5D", # smalyshev
+			"0BD7 8B5F 9750 0D45 0838  F95D FE85 7D9A 90D9 0EC1" # jpauli
+		],
+
+		"5.4": [
+			# https://wiki.php.net/todo/php81#release_managers
+			# https://www.php.net/gpg-keys.php#gpg-5.4
+			"F382 5282 6ACD 957E F380  D39F 2F79 56BC 5DA0 4B5D" # smalyshev
 		],
 	}[env.version | rtrimstr("-rc")] // error("missing GPG keys for " + env.version)
 	| map(gsub(" "; ""))
 	| join(" ")
 }}
 
-ENV PHP_VERSION {{ .version }}
+ENV PHP_VERSION={{ .version }}
 ENV PHP_URL="{{ .url }}" PHP_ASC_URL="{{ .ascUrl // "" }}"
 ENV PHP_SHA256="{{ .sha256 // "" }}"
 
@@ -268,19 +282,19 @@ RUN set -eux; \
 	mkdir -p /usr/src; \
 	cd /usr/src; \
 	\
-	curl -fsSL -o php.tar.xz "$PHP_URL"; \
+	curl -fsSL -o php.tar.gz "$PHP_URL"; \
 	\
 	if [ -n "$PHP_SHA256" ]; then \
-		echo "$PHP_SHA256 *php.tar.xz" | sha256sum -c -; \
+		echo "$PHP_SHA256 *php.tar.gz" | sha256sum -c -; \
 	fi; \
 	\
 	if [ -n "$PHP_ASC_URL" ]; then \
-		curl -fsSL -o php.tar.xz.asc "$PHP_ASC_URL"; \
+		curl -fsSL -o php.tar.gz.asc "$PHP_ASC_URL"; \
 		export GNUPGHOME="$(mktemp -d)"; \
 		for key in $GPG_KEYS; do \
 			gpg --batch --keyserver keyserver.ubuntu.com --recv-keys "$key"; \
 		done; \
-		gpg --batch --verify php.tar.xz.asc php.tar.xz; \
+		gpg --batch --verify php.tar.gz.asc php.tar.gz; \
 		gpgconf --kill all; \
 		rm -rf "$GNUPGHOME"; \
 	fi; \
@@ -294,6 +308,7 @@ RUN set -eux; \
 {{ ) end -}}
 
 COPY docker-php-source /usr/local/bin/
+COPY *.patch /tmp/patches/
 
 RUN set -eux; \
 {{ if is_alpine then ( -}}
@@ -336,6 +351,7 @@ RUN set -eux; \
 			"libxml2-dev",
             "libxslt-dev",
 			"zlib1g-dev",
+			"libicu-dev",
 			# oniguruma is part of mbstring in php 7.4+
 			"libonig-dev"
 		end ] | sort[] | (
@@ -363,6 +379,9 @@ RUN set -eux; \
 	; \
 	docker-php-source extract; \
 	cd /usr/src/php; \
+	# Apply PHP patches
+	find /tmp/patches/ -maxdepth 1 -name "*.patch" -print0 | sort -zV | xargs -0 -I {} sh -c 'patch -p1 < "{}" && echo "Applied {}" || (echo "Failed to apply {}" >&2 && exit 0)'; \
+	\
 {{ if is_alpine and (env.version | rtrimstr("-rc") == "8.1") then ( -}}
 # Apply patches; see https://github.com/docker-library/php/pull/1552
 	# https://github.com/php/php-src/issues/11678
@@ -408,9 +427,13 @@ RUN set -eux; \
 # --enable-mysqlnd is included here because it's harder to compile after the fact than extensions are (since it's a plugin for several extensions, not an extension in itself)
 		--enable-mysqlnd \
 # https://wiki.php.net/rfc/argon2_password_hash
+{{ if env.version | rtrimstr("-rc") | IN("8.1", "8.2", "8.3", "8.4") then ( -}}
 		--with-password-argon2 \
+{{ ) else "" end -}}
 # https://wiki.php.net/rfc/libsodium
+{{ if env.version | rtrimstr("-rc") | IN("7.2", "7.3", "7.4", "8.1", "8.2", "8.3", "8.4") then ( -}}
 		--with-sodium=shared \
+{{ ) else "" end -}}
 # always build against system sqlite3 (https://github.com/php/php-src/commit/6083a387a81dbbd66d6316a3a12a63f06d5f7109)
 		--with-pdo-sqlite=/usr \
 		--with-sqlite3=/usr \
@@ -464,7 +487,7 @@ RUN set -eux; \
 {{ if env.variant == "apache" then ( -}}
 		\
 		--with-apxs2 \
-{{ ) elif env.variant == "fpm" then ( -}}
+{{ ) elif env.variant == "nginx" then ( -}}
 		\
 		--enable-fpm \
 		--with-fpm-user=www-data \
@@ -505,7 +528,7 @@ RUN set -eux; \
 	\
 	cd /; \
 	docker-php-source delete; \
-# 创建命令行软连接
+# create symlinks for php-fpm and php-cli
 	ln -s /usr/local/php/bin/* /usr/local/bin/; \
 	ln -s /usr/local/php/sbin/* /usr/local/sbin/; \
 	\
@@ -614,6 +637,7 @@ RUN apt update && apt install -y \
 	&& docker-php-ext-install zip opcache exif ftp sockets bcmath calendar gettext pcntl tidy \
     && docker-php-ext-enable zip opcache exif ftp sockets tidy bcmath calendar gettext pcntl
 
+{{ if env.buildextra == "true" then ( -}}
 # Misc modules by PECL
 RUN pecl install protobuf \
 	&& docker-php-ext-enable protobuf
@@ -649,34 +673,34 @@ RUN <<EOF
     rm -rf /tmp/pear ~/.pearrc; \
 	rm -rf /var/lib/apt/lists/* 
 EOF
+{{ ) else "" end -}}
 
 # sodium was built as a shared module (so that it can be replaced later if so desired), so let's enable it too (https://github.com/docker-library/php/issues/598)
 RUN docker-php-ext-enable sodium
 
-# 运行阶段
-FROM debian:bookworm-slim
+# Runtime Image
+FROM {{ env.from }}
 
 ENV PHP_INI_DIR=/usr/local/php/etc
 ENV PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/php/bin:/usr/local/php/sbin"
 
 LABEL org.opencontainers.image.title="ServBay PHP Web Server" \
-      org.opencontainers.image.description="PHP {{ .version // "8.3.17" }} with extensions for ServBay" \
+      org.opencontainers.image.description="PHP {{ .version }} with extensions for ServBay" \
       org.opencontainers.image.vendor="ServBay" \
       org.opencontainers.image.url="https://www.servbay.com" \
       org.opencontainers.image.source="https://github.com/ServBay/ServBay-Docker-Images" \
-    #   org.opencontainers.image.version="${BUILD_VERSION}" \
+      org.opencontainers.image.version="{{ .version }}" \
     #   org.opencontainers.image.created="${BUILD_DATE}" \
     #   org.opencontainers.image.revision="${VCS_REF}"
       com.servbay.component="php-web-runtime" \
       com.servbay.maintainer="dev-team@servbay.com" \
       com.servbay.quality-tier="production"
 
-# 安装运行时依赖
+# Install dependencies
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
         ca-certificates \
-        nginx \
         redis \
         supervisor \
         curl \
@@ -686,10 +710,21 @@ RUN set -eux; \
         libargon2-1 \
         libcurl4 \
         libonig5 \
-        libreadline8 \
         libsodium23 \
         libsqlite3-0 \
+{{ if env.suite == "buster" then ( -}}
+		libssl1.1 \
+        libicu63 \
+        libreadline7 \
+{{ ) elif env.suite == "bullseye" then ( -}}
+		libssl1.1 \
+        libicu67 \
+        libreadline8 \
+{{ ) else ( -}}
         libssl3 \
+        libicu72 \
+        libreadline8 \
+{{ ) end -}}
         libxml2 \
         libxslt1.1 \
         zlib1g \
@@ -701,25 +736,23 @@ RUN set -eux; \
         libpq5 \
         libzip4 \
         libtidy5deb1 \
-        libicu72 \
         libgssapi-krb5-2 \
         libc-client2007e \
         libodbc1; \
-
-	# Download the package to configure the Microsoft repo
+	\
+	# Download the package to configure the Microsoft repo \
 	curl -sSL -O https://packages.microsoft.com/config/debian/$(grep VERSION_ID /etc/os-release | cut -d '"' -f 2 | cut -d '.' -f 1)/packages-microsoft-prod.deb; \
-	# Install the package
+	# Install the package \
 	dpkg -i packages-microsoft-prod.deb; \
-	# Delete the file
+	# Delete the file \
 	rm packages-microsoft-prod.deb; \
-
+	\
 	apt-get update; \
 	ACCEPT_EULA=Y apt-get install -y --no-install-recommends unixodbc-dev; \
-
+	\
 	rm -rf /var/lib/apt/lists/*
 
-
-# 从构建阶段复制文件
+# Copy files from builder
 COPY --from=builder /usr/local/php /usr/local/php
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /usr/local/sbin /usr/local/sbin
@@ -730,14 +763,32 @@ RUN <<EOF
 	chmod +x /usr/local/bin/composer
 EOF
 
-# 拷贝配置文件
+# Copy supervisor configuration
 COPY supervisord.conf /etc/supervisor/
-COPY index.php /var/www/html
 
 RUN set -eux; \
 	sed -i 's#daemonize yes#daemonize no#g' /etc/redis/redis.conf;
 
 {{ if env.variant == "apache" then ( -}}
+ENV APACHE_CONFDIR=/etc/apache2
+ENV APACHE_ENVVARS=$APACHE_CONFDIR/envvars
+
+RUN set -eux; \
+	apt-get update; \
+	apt-get install -y --no-install-recommends apache2; \
+	rm -rf /var/lib/apt/lists/*; \
+	rm /var/www/html/*; \
+	mkdir -p /var/www/html/public;
+
+COPY --from=builder /etc/apache2 /etc/apache2
+COPY --from=builder /usr/lib/apache2 /usr/lib/apache2
+COPY index.php /var/www/html/public
+
+RUN a2dismod mpm_event && a2enmod mpm_prefork
+
+RUN set -eux; \
+	sed -i 's#webmaster@localhost#docker-image@servbay.host#g' /etc/apache2/sites-enabled/000-default.conf; \
+	sed -i 's#/var/www/html#/var/www/html/public#g' /etc/apache2/sites-enabled/000-default.conf;
 
 # https://httpd.apache.org/docs/2.4/stopping.html#gracefulstop
 STOPSIGNAL SIGWINCH
@@ -746,9 +797,17 @@ COPY apache2-foreground /usr/local/bin/
 WORKDIR /var/www/html
 
 EXPOSE 80 443
-{{ ) elif env.variant == "fpm" then ( -}}
+
+{{ ) elif env.variant == "nginx" then ( -}}
+
+RUN set -eux; \
+	apt-get update; \
+	apt-get install -y --no-install-recommends nginx; \
+	rm -rf /var/lib/apt/lists/*; \
+	mkdir -p /var/www/html/public
 
 COPY default /etc/nginx/sites-enabled/default
+COPY index.php /var/www/html/public
 
 RUN set -eux; \
 	rm /var/www/html/index.nginx-debian.html; \
